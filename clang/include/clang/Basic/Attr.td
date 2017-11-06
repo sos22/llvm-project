@@ -1780,6 +1780,11 @@ def Suppress : StmtAttr {
   let Documentation = [SuppressDocs];
 }
 
+def SynchronizedConstructor : InheritableAttr {
+  let Spellings = [Clang<"synchronized_constructor">];
+  let Documentation = [SynchronizedConstructorDocs];
+}
+
 def SysVABI : InheritableAttr {
   let Spellings = [GCC<"sysv_abi">];
 //  let Subjects = [Function, ObjCMethod];

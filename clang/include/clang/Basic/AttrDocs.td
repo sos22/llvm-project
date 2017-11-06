@@ -2996,6 +2996,23 @@ optimizations like C++'s named return value optimization (NRVO).
   }];
 }
 
+def SynchronizedConstructorDocs : Documentation {
+  let Category = DocCatFunction;
+	let Content = [{
+The ``synchronized_constructor`` attribute on constructor functions tells
+clang that the constructor its own synchronization, so clang
+does not need to insert additional locks around calling the constructor of
+a function-local static variable. That means the structure will occasionally
+be constructed twice from different threads in parallel, and the constructor
+is expected to provide whatever synchronization is necessary to make that
+safe. The compiler will still suppress calls to the constructor if a
+previous invocation has completed, with sufficient memory barriers to
+ensure that an invocation will only be suppressed if all stores made by the
+previous invocation are visible in the current thread before any uses of
+the constructed object.
+  }];
+}
+
 def SuppressDocs : Documentation {
   let Category = DocCatStmt;
   let Content = [{

@@ -5997,6 +5997,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     S.Diag(Attr.getLoc(), diag::err_stmt_attribute_invalid_on_decl)
         << Attr.getName() << D->getLocation();
     break;
+  case AttributeList::AT_SynchronizedConstructor:
+    handleSimpleAttribute<SynchronizedConstructorAttr>(S, D, Attr);
+    break;
   case AttributeList::AT_Interrupt:
     handleInterruptAttr(S, D, Attr);
     break;

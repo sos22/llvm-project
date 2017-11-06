@@ -2005,10 +2005,20 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   bool threadsafe = getContext().getLangOpts().ThreadsafeStatics &&
                     (D.isLocalVarDecl() || NonTemplateInline) &&
                     !D.getTLSKind();
+  // If the constructor performs its own synchronization we don't need to
+  // introduce more locks here.
+  bool synchronizedConstructor = false;
+  if (threadsafe) {
+    auto constructorExpr = dyn_cast<CXXConstructExpr>(D.getInit());
+    auto constructorDecl = constructorExpr ? constructorExpr->getConstructor() : nullptr;
+    if (constructorDecl && constructorDecl->getAttr<SynchronizedConstructorAttr>()) {
+      synchronizedConstructor = true;
+    }
+  }
 
   // If we have a global variable with internal linkage and thread-safe statics
   // are disabled, we can just let the guard variable be of type i8.
-  bool useInt8GuardVariable = !threadsafe && var->hasInternalLinkage();
+  bool useInt8GuardVariable = (!threadsafe || synchronizedConstructor) && var->hasInternalLinkage();
 
   llvm::IntegerType *guardTy;
   CharUnits guardAlignment;
@@ -2139,7 +2149,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   CGF.EmitBlock(InitCheckBlock);
 
   // Variables used when coping with thread-safe statics and exceptions.
-  if (threadsafe) {
+  if (threadsafe && !synchronizedConstructor) {
     // Call __cxa_guard_acquire.
     llvm::Value *V
       = CGF.EmitNounwindRuntimeCall(getGuardAcquireFn(CGM, guardPtrTy), guard);
@@ -2158,7 +2168,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   // Emit the initializer and add a global destructor if appropriate.
   CGF.EmitCXXGlobalVarDeclInit(D, var, shouldPerformInit);
 
-  if (threadsafe) {
+  if (threadsafe && !synchronizedConstructor) {
     // Pop the guard-abort cleanup if we pushed one.
     CGF.PopCleanupBlock();
 
@@ -2166,7 +2176,10 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
     CGF.EmitNounwindRuntimeCall(getGuardReleaseFn(CGM, guardPtrTy),
                                 guardAddr.getPointer());
   } else {
-    Builder.CreateStore(llvm::ConstantInt::get(guardTy, 1), guardAddr);
+    auto st = Builder.CreateStore(llvm::ConstantInt::get(guardTy, 1), guardAddr);
+    if (synchronizedConstructor) {
+      st->setAtomic(llvm::AtomicOrdering::Release);
+    }
   }
 
   CGF.EmitBlock(EndBlock);
