@@ -7258,6 +7258,9 @@ def warn_cast_calling_conv : Warning<
   InGroup<DiagGroup<"cast-calling-convention">>;
 def note_change_calling_conv_fixit : Note<
   "consider defining %0 with the '%1' calling convention">;
+def warn_unclear_static_synchronization : Warning<
+	"function-local static %0 generates implicit synchronization">,
+	InGroup<UnclearStaticSynchronization>, DefaultIgnore; 
 def warn_bad_function_cast : Warning<
   "cast from function call of type %0 to non-matching type %1">,
   InGroup<BadFunctionCast>, DefaultIgnore;

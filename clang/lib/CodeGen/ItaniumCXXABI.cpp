@@ -1,6 +1,6 @@
 //===------- ItaniumCXXABI.cpp - Emit LLVM Code from ASTs for a Module ----===//
 //
-//                     The LLVM Compiler Infrastructure
+//                  The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
@@ -26,6 +26,7 @@
 #include "CodeGenModule.h"
 #include "TargetInfo.h"
 #include "clang/CodeGen/ConstantInitBuilder.h"
+#include "clang/Sema/SemaDiagnostic.h"
 #include "clang/AST/Mangle.h"
 #include "clang/AST/Type.h"
 #include "clang/AST/StmtCXX.h"
@@ -1999,26 +2000,50 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
       D.isInline() &&
       !isTemplateInstantiation(D.getTemplateSpecializationKind());
 
-  // We only need to use thread-safe statics for local non-TLS variables and
-  // inline variables; other global initialization is always single-threaded
-  // or (through lazy dynamic loading in multiple threads) unsequenced.
-  bool threadsafe = getContext().getLangOpts().ThreadsafeStatics &&
-                    (D.isLocalVarDecl() || NonTemplateInline) &&
+  // Is it possible that we might try to construct the same object from two
+  // threads simulatenously? Only possible for non-TLS function local statics or
+  // non-template inlines.
+  bool multithread = (D.isLocalVarDecl() || NonTemplateInline) &&
                     !D.getTLSKind();
+
+  // Should we introduce additional locks around the constructor call? 
+  bool introduceLocks = false; 
   // If the constructor performs its own synchronization we don't need to
   // introduce more locks here.
   bool synchronizedConstructor = false;
-  if (threadsafe) {
+  // Constructor might be explicitly flagged as needing synchronization,
+  // disabling warnings and producing synchronization even when -fno-threadsafe-statics
+  // would otherwise disable it.
+  bool unsynchronizedConstructor = false;
+  if (multithread) {
     auto constructorExpr = dyn_cast<CXXConstructExpr>(D.getInit());
-    auto constructorDecl = constructorExpr ? constructorExpr->getConstructor() : nullptr;
-    if (constructorDecl && constructorDecl->getAttr<SynchronizedConstructorAttr>()) {
-      synchronizedConstructor = true;
+
+    introduceLocks = getContext().getLangOpts().ThreadsafeStatics;
+ 
+    if (auto constructorDecl =
+	  constructorExpr ? constructorExpr->getConstructor() : nullptr) {
+      if (constructorDecl->getAttr<SynchronizedConstructorAttr>()) {
+	synchronizedConstructor = true;
+	introduceLocks = false;
+      }
+      if (constructorDecl->getAttr<UnsynchronizedConstructorAttr>()) {
+	unsynchronizedConstructor = true;
+	introduceLocks = true;
+      }
+      // XXX not quite sure what we should do if there's no constructor expr/decl?
+      // Is that even possible? Presumably builtin types and things?
+      if (!synchronizedConstructor && !unsynchronizedConstructor) {
+	CGF.CGM.getDiags().Report(constructorExpr->getExprLoc(),
+	                          diag::warn_unclear_static_synchronization)
+	  << D.getName();
+      }
+      // XXX also want some other warnings around abuse of the attributes.
     }
   }
 
   // If we have a global variable with internal linkage and thread-safe statics
   // are disabled, we can just let the guard variable be of type i8.
-  bool useInt8GuardVariable = (!threadsafe || synchronizedConstructor) && var->hasInternalLinkage();
+  bool useInt8GuardVariable = !introduceLocks && var->hasInternalLinkage();
 
   llvm::IntegerType *guardTy;
   CharUnits guardAlignment;
@@ -2110,7 +2135,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   //   object do not occur before the load of the initialization flag.
   //
   // In LLVM, we do this by marking the load Acquire.
-  if (threadsafe)
+  if (introduceLocks || synchronizedConstructor)
     LI->setAtomic(llvm::AtomicOrdering::Acquire);
 
   // For ARM, we should only check the first bit, rather than the entire byte:
@@ -2149,7 +2174,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   CGF.EmitBlock(InitCheckBlock);
 
   // Variables used when coping with thread-safe statics and exceptions.
-  if (threadsafe && !synchronizedConstructor) {
+  if (introduceLocks) {
     // Call __cxa_guard_acquire.
     llvm::Value *V
       = CGF.EmitNounwindRuntimeCall(getGuardAcquireFn(CGM, guardPtrTy), guard);
@@ -2168,7 +2193,7 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   // Emit the initializer and add a global destructor if appropriate.
   CGF.EmitCXXGlobalVarDeclInit(D, var, shouldPerformInit);
 
-  if (threadsafe && !synchronizedConstructor) {
+  if (introduceLocks) {
     // Pop the guard-abort cleanup if we pushed one.
     CGF.PopCleanupBlock();
 

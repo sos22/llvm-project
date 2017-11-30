@@ -6000,6 +6000,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case AttributeList::AT_SynchronizedConstructor:
     handleSimpleAttribute<SynchronizedConstructorAttr>(S, D, Attr);
     break;
+  case AttributeList::AT_UnsynchronizedConstructor:
+		handleSimpleAttribute<UnsynchronizedConstructorAttr>(S, D, Attr);
+		break;
   case AttributeList::AT_Interrupt:
     handleInterruptAttr(S, D, Attr);
     break;

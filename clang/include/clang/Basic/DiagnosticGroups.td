@@ -362,6 +362,7 @@ def PrivateExtern : DiagGroup<"private-extern">;
 def SelTypeCast : DiagGroup<"cast-of-sel-type">;
 def FunctionDefInObjCContainer : DiagGroup<"function-def-in-objc-container">;
 def BadFunctionCast : DiagGroup<"bad-function-cast">;
+def UnclearStaticSynchronization : DiagGroup<"unclear-static-synchronization">;
 def ObjCPropertyImpl : DiagGroup<"objc-property-implementation">;
 def ObjCPropertyNoAttribute : DiagGroup<"objc-property-no-attribute">;
 def ObjCProtocolQualifiers : DiagGroup<"objc-protocol-qualifiers">;

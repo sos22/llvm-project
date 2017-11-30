@@ -1785,6 +1785,11 @@ def SynchronizedConstructor : InheritableAttr {
   let Documentation = [SynchronizedConstructorDocs];
 }
 
+def UnsynchronizedConstructor : InheritableAttr {
+  let Spellings = [Clang<"unsynchronized_constructor">];
+  let Documentation = [UnsynchronizedConstructorDocs];
+}
+
 def SysVABI : InheritableAttr {
   let Spellings = [GCC<"sysv_abi">];
 //  let Subjects = [Function, ObjCMethod];

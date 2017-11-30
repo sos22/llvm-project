@@ -2,7 +2,7 @@
 // RUN: %clang_cc1 -emit-llvm %s -fno-threadsafe-statics -o - | FileCheck -check-prefix STATICUNSAFE %s
 
 struct teststruct {
-teststruct() __attribute ((synchronized_constructor));
+teststruct() __attribute__ ((synchronized_constructor));
 
 teststruct(int); // argument constructor needs synch.
 };
@@ -14,9 +14,9 @@ void func()
 // STATICSAFE-NOT: __cxa_guard_acquire
 // STATICSAFE: call void @_ZN10teststructC1Ev(%struct.teststruct* @_ZZ4funcvE7nosynch)
 // STATICSAFE-NEXT: store atomic i8 1, i8* @_ZGVZ4funcvE7nosynch release, align 1
-// STATICUNSAFE: load i8, i8* @_ZGVZ4funcvE7nosynch
+// STATICUNSAFE: load atomic i8, i8* @_ZGVZ4funcvE7nosynch acquire
 // STATICUNSAFE: call void @_ZN10teststructC1Ev
-// STATICUNSAFE-NEXT: store i8 1, i8* @_ZGVZ4funcvE7nosynch
+// STATICUNSAFE-NEXT: store atomic i8 1, i8* @_ZGVZ4funcvE7nosynch release
 
   static teststruct synch(1);
 // STATICSAFE: load atomic i8, i8* bitcast (i64* @_ZGVZ4funcvE5synch to i8*) acquire

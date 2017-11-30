@@ -3013,6 +3013,19 @@ the constructed object.
   }];
 }
 
+def UnsynchronizedConstructorDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+The ``unsynchronized_constructor`` attribute on constructor functions
+tells clang that the constructor is unsafe if invoked in parallel from two
+separate threads on the same object, and so clang should introduce
+additional locks if that is possible. This is the default in the absence
+of the -fno-threadsafe-statics option, so the attribute has no effect
+on generated code. It does, however, act to whitelist the constructor
+for the -Wimplicit-locks warning, if enabled.
+  }];
+}
+
 def SuppressDocs : Documentation {
   let Category = DocCatStmt;
   let Content = [{
